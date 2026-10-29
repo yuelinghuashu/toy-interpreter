@@ -1,0 +1,29 @@
+// ============================================================================
+// 04 —— let 绑定与标识符
+//
+// 演示：let <名字> = <表达式>，右侧是任意表达式，遇到换行结束；
+//       标识符：字母或 _ 开头，后续字母 / 数字 / _；运行时只有一个全局环境
+//       （类型环境跟着一起覆盖），后面的 let 覆盖同名绑定，类型也可以换；
+//       let 的返回值 = 右侧的值。
+// 运行：go run . examples/04-let-bindings.toy
+// ============================================================================
+
+let width = 10
+let height = 4
+let area = width * height
+let _underscore = 7
+let snake_case_2 = _underscore + 1
+area + snake_case_2
+
+let count = 1
+let count = count + 1 // 右侧先用旧值算，再覆盖
+let count = count + 1
+count * 10 // = 30
+
+let item = "first"
+let item = "second" // 同名改绑：覆盖后是 string
+item + "!"
+
+let value = 1
+let value = "换了类型" // 同名改绑，类型也可以换
+value + "!"

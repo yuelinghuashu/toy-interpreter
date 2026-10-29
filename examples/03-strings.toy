@@ -1,0 +1,31 @@
+// ============================================================================
+// 03 —— 字符串字面量与转义
+//
+// 演示：双引号包围、不能跨行（换行必须写 \n）；内容按 rune 扫描，中文没问题；
+//       字符串里的 // 不是注释；+ 只在两个 string 之间拼接。
+//       转义：\n \t \r \\ \" 和 \a \b \f \v，以及 \xHH / \uHHHH / \UHHHHHHHH
+//       （与 Go 的 strconv.Quote 对齐，所以 SExpr 输出总能再解析回来）；
+//       其余（如 \q）在 parser 里报错。
+// 运行：go run . examples/03-strings.toy
+// ============================================================================
+
+let empty = ""
+let plain = "hello, world"
+let tab = "tab\there"
+let lineBreak = "line1\nline2"
+let carriageReturn = "a\rb"
+let quoted = "他说 \"你好\""
+let backslash = "C:\\temp"
+let chinese = "你好，世界"
+let url = "https://example.com" // // 在字符串里不算注释
+
+// 十六进制 / Unicode 码点转义：\x41 = "A"，\u4f60 = "你"，\U0001F600 = "😀"
+let hexEscaped = "\x41\x42"
+let unicodeEscaped = "\u4f60\u597d"
+let emoji = "\U0001F600"
+hexEscaped + " " + unicodeEscaped + emoji
+
+plain + "!"
+chinese + " — " + plain
+let greeting = "hello" + ", " + "world"
+greeting + "!"

@@ -1,0 +1,29 @@
+// ============================================================================
+// 08 —— 综合示例：变量、混合运算、字符串与布尔一起用
+//
+// 前面各节的特性在这里合起来用；每条语句的 AST 与返回值见输出的最后两节。
+// 运行：go run . examples/08-combined.toy
+// ============================================================================
+
+let width = 10
+let height = 4
+let perimeter = 2 * (width + height)
+let area = width * height
+let trapezoid = (width + height) * (width - height) / 2
+perimeter + trapezoid
+
+// 布尔参与判断，结果再参与逻辑运算
+let isSquare = width == height
+isSquare || perimeter > 20
+!isSquare && area > 0
+
+// 字符串拼接
+let label = "area"
+let shout = label + "!"
+shout + " " + "ok"
+
+// 一元负号、进制混算与前面各节的写法混用
+let negativeArea = -area
+negativeArea + perimeter
+let mixedBases = 0x10 + 0o10 + 0b10
+-mixedBases * 2

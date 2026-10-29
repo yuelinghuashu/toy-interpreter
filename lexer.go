@@ -9,8 +9,11 @@ import (
 // 标识符和运算符只认 ASCII；字符串、注释里的非 ASCII 字符按 rune 扫描，
 // 1 个 rune 算 1 列。
 
-// punctuators 把单字符标点（运算符、括号、赋值号）映射到 token 类型。
-var punctuators = map[byte]TokenType{
+// oneCharPuncts 把单字符标点（运算符、括号、赋值号）映射到 token 类型。
+// 用 [utf8.RuneSelf]TokenType 数组：单字符分支已在 default 里确认
+// c < utf8.RuneSelf，直接下标寻址；未登记的字符落在零值 ILLEGAL——
+// 它正好就是"不是标点"的哨兵，不再需要 map 的 ok。
+var oneCharPuncts = [utf8.RuneSelf]TokenType{
 	'+': PLUS,
 	'-': MINUS,
 	'*': STAR,
@@ -19,10 +22,27 @@ var punctuators = map[byte]TokenType{
 	'(': LPAREN,
 	')': RPAREN,
 	'=': ASSIGN,
+	'<': LT,
+	'>': GT,
+	'!': BANG,
 }
 
+// 编译期断言 ILLEGAL 必须是 0：上面这张表靠零值表示"不是标点"。
+// 以后有人在 ILLEGAL 前面插常量，这里会直接编译失败，而不是让
+// 某个未登记字符静默变成新插入的 token。
+var _ = [1]struct{}{ILLEGAL: {}} // ILLEGAL 越出 [0,0] 即编译失败 → ILLEGAL == 0
+
+// twoCharPuncts 把双字符标点映射到 token 类型。
+// 必须在 oneCharPuncts 之前查：否则 "==" 会被拆成两个 ASSIGN，"!=" 会被拆成 BANG + ASSIGN。
+var twoCharPuncts = map[string]TokenType{
+	"==": EQ, "!=": NEQ, "<=": LE, ">=": GE, "&&": ANDAND, "||": OROR,
+}
+
+// keywords 把关键字映射到 token 类型。
 var keywords = map[string]TokenType{
-	"let": LET,
+	"let":   LET,
+	"true":  BOOLEAN,
+	"false": BOOLEAN,
 }
 
 // Lexer 逐字节扫描源码。
@@ -183,20 +203,22 @@ func (l *Lexer) NextToken() Token {
 				l.advanceASCII()
 				return Token{Type: STRING, Literal: l.source[start:l.position], Line: line, Column: column}
 			}
+			// 字符串不能跨行、末尾不能悬空：这几种都算"未闭合"，单独成一个 token
+			// 类型，让 parser 能报"字符串未闭合"，而不是笼统的"非法字符"。
 			if ch == '\n' || ch == '\r' {
-				return Token{Type: ILLEGAL, Literal: l.source[start:l.position], Line: line, Column: column}
+				return Token{Type: UNTERMINATED_STRING, Literal: l.source[start:l.position], Line: line, Column: column}
 			}
 			if ch == '\\' {
 				l.advanceASCII()
 				if l.atEnd() {
-					return Token{Type: ILLEGAL, Literal: l.source[start:l.position], Line: line, Column: column}
+					return Token{Type: UNTERMINATED_STRING, Literal: l.source[start:l.position], Line: line, Column: column}
 				}
 				// 转义符后面可能跟一个多字节 rune（如 "\中"），要按 rune 消费。
 				r, size := utf8.DecodeRuneInString(l.source[l.position:])
 				// 但 \ 紧跟真实换行时不能吞：吞掉后外层就走不到"行号 +1"，
 				// 后面整个文件的行号会少 1。按"未闭合"上报，换行留给 NextToken。
 				if r == '\n' || r == '\r' {
-					return Token{Type: ILLEGAL, Literal: l.source[start:l.position], Line: line, Column: column}
+					return Token{Type: UNTERMINATED_STRING, Literal: l.source[start:l.position], Line: line, Column: column}
 				}
 				l.position += size // size 已在手，不调 advanceRune，免得再解一次
 				l.column++
@@ -208,15 +230,24 @@ func (l *Lexer) NextToken() Token {
 			}
 			l.advanceRune()
 		}
-		return Token{Type: ILLEGAL, Literal: l.source[start:l.position], Line: line, Column: column}
+		return Token{Type: UNTERMINATED_STRING, Literal: l.source[start:l.position], Line: line, Column: column}
 
 	default:
+		// 先查双字符标点。切片边界由 position+1 < len 保证；
+		// 匹配成功意味着两字节都在表里（全是 ASCII），advanceASCII 不会 panic。
+		if l.position+1 < len(l.source) {
+			if tt, ok := twoCharPuncts[l.source[l.position:l.position+2]]; ok {
+				lit := l.source[l.position : l.position+2]
+				l.advanceASCII()
+				l.advanceASCII()
+				return Token{Type: tt, Literal: lit, Line: line, Column: column}
+			}
+		}
+
 		var lit string
 		tt := ILLEGAL
 		if c < utf8.RuneSelf {
-			if t, ok := punctuators[c]; ok {
-				tt = t
-			}
+			tt = oneCharPuncts[c]
 			lit = string(c)
 			l.advanceASCII()
 		} else {

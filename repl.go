@@ -1,6 +1,6 @@
 package main
 
-// REPL：按行读取、解析、类型检查、求值；命令以 : 开头（:help / :env / :quit，
+// REPL：按行读取、解析、类型检查、执行；命令以 : 开头（:help / :env / :quit，
 // :h、:q、:exit 是别名）。每行失败时回滚：在临时环境里跑完才交换回主环境。
 
 import (
@@ -101,7 +101,7 @@ func dumpREPLEnv(out io.Writer, env *Env, typeEnv *TypeEnv) {
 	}
 }
 
-// evalREPLLine 解析并求值一行；成功时更新 env/typeEnv 并打印结果。
+// evalREPLLine 解析并执行一行；成功时更新 env/typeEnv，有值的语句才打印结果。
 func evalREPLLine(line string, out io.Writer, env *Env, typeEnv *TypeEnv) {
 	p := NewParser(NewLexer(line))
 	stmts, err := p.ParseProgram()
@@ -117,25 +117,29 @@ func evalREPLLine(line string, out io.Writer, env *Env, typeEnv *TypeEnv) {
 	tmpTypeEnv := cloneTypeEnv(typeEnv)
 
 	for _, s := range stmts {
-		if _, err := s.typeCheck(tmpTypeEnv); err != nil {
+		if err := s.typeCheck(tmpTypeEnv); err != nil {
 			fmt.Fprintf(out, "类型检查失败：%v\n", err)
 			return
 		}
 	}
 
-	var last Value
+	var last Result
 	for _, s := range stmts {
-		v, err := s.Eval(tmpEnv)
+		res, err := s.Exec(tmpEnv)
 		if err != nil {
 			fmt.Fprintf(out, "求值失败：%v\n", err)
 			return
 		}
-		last = v
+		if res.HasValue {
+			last = res
+		}
 	}
 
 	env.vars = tmpEnv.vars
 	typeEnv.vars = tmpTypeEnv.vars
-	fmt.Fprintf(out, "= %s\n", last)
+	if last.HasValue {
+		fmt.Fprintf(out, "= %s\n", last.Value)
+	}
 }
 
 // cloneEnv / cloneTypeEnv 浅拷贝一份环境。map 的大小就是用户变量数，
